@@ -19,8 +19,12 @@ function gamePointerY() {
 
 function computeCanvasSize() {
   const pad = 12;
-  const ax = typeof window !== "undefined" ? window.innerWidth : W;
-  const ay = typeof window !== "undefined" ? window.innerHeight : H;
+  let ax = typeof window !== "undefined" ? window.innerWidth : W;
+  let ay = typeof window !== "undefined" ? window.innerHeight : H;
+  if (typeof window !== "undefined" && window.visualViewport) {
+    ax = window.visualViewport.width;
+    ay = window.visualViewport.height;
+  }
   const maxW = max(ax - pad * 2, 220);
   const maxH = max(ay - pad * 2, 200);
   const s = min(maxW / W, maxH / H);
@@ -54,6 +58,31 @@ function installGesturePinchBlock() {
   };
   document.addEventListener("gesturestart", stop, { passive: false });
   document.addEventListener("gesturechange", stop, { passive: false });
+  document.addEventListener("gestureend", stop, { passive: false });
+}
+
+/**
+ * Safari often ignores canvas-only listeners — block default touch scrolling on the
+ * whole document in capture phase so only the game responds to drag.
+ */
+function installDocumentTouchCapture() {
+  if (typeof document === "undefined") return;
+  if (document.documentElement.dataset.nebDocTouch) return;
+  document.documentElement.dataset.nebDocTouch = "1";
+
+  const block = (e) => {
+    if (e.cancelable) e.preventDefault();
+  };
+  /* touchmove only: document touchstart+preventDefault can break p5/touch on some iOS versions. */
+  document.addEventListener("touchmove", block, { passive: false, capture: true });
+
+  const clampScroll = () => {
+    if (typeof window === "undefined") return;
+    window.scrollTo(0, 0);
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+  };
+  window.addEventListener("scroll", clampScroll, { passive: true });
 }
 
 const HS_KEY = "spaceshipGame_highscores_v2";
@@ -591,6 +620,8 @@ function preload() {
 }
 
 function setup() {
+  installDocumentTouchCapture();
+
   const { cw, ch } = computeCanvasSize();
   const c = createCanvas(cw, ch);
   c.parent("game");
@@ -617,9 +648,27 @@ function setup() {
 
   installTouchScrollBlock();
   installGesturePinchBlock();
+
+  if (typeof window !== "undefined" && window.visualViewport) {
+    window.visualViewport.addEventListener(
+      "resize",
+      () => {
+        windowResized();
+      },
+      { passive: true }
+    );
+    window.visualViewport.addEventListener(
+      "scroll",
+      () => {
+        window.scrollTo(0, 0);
+      },
+      { passive: true }
+    );
+  }
 }
 
 function windowResized() {
+  if (typeof width === "undefined" || width <= 0) return;
   const { cw, ch } = computeCanvasSize();
   resizeCanvas(cw, ch);
   const dpr =
