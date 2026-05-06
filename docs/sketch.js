@@ -5,6 +5,57 @@
 
 const W = 1000;
 const H = 600;
+
+/** Map pointer from canvas pixels → game space (for responsive canvas). */
+function gamePointerX() {
+  if (!width) return W / 2;
+  return constrain((mouseX * W) / width, 0, W);
+}
+
+function gamePointerY() {
+  if (!height) return H / 2;
+  return constrain((mouseY * H) / height, 0, H);
+}
+
+function computeCanvasSize() {
+  const pad = 12;
+  const ax = typeof window !== "undefined" ? window.innerWidth : W;
+  const ay = typeof window !== "undefined" ? window.innerHeight : H;
+  const maxW = max(ax - pad * 2, 220);
+  const maxH = max(ay - pad * 2, 200);
+  const s = min(maxW / W, maxH / H);
+  return { cw: floor(W * s), ch: floor(H * s) };
+}
+
+/**
+ * Stops the browser from panning/scroll-bouncing the page while the finger
+ * drags on the game (iOS/Safari/Chrome need non-passive preventDefault).
+ */
+function installTouchScrollBlock() {
+  if (typeof document === "undefined") return;
+  const cnv = document.querySelector("#game canvas");
+  if (!cnv || cnv.dataset.nebTouchLock) return;
+  cnv.dataset.nebTouchLock = "1";
+  cnv.style.touchAction = "none";
+  const block = (e) => {
+    if (e.cancelable) e.preventDefault();
+  };
+  cnv.addEventListener("touchstart", block, { passive: false });
+  cnv.addEventListener("touchmove", block, { passive: false });
+}
+
+/** Safari/iOS: pinch zoom shifts the “screen”; cancel gesture scaling on the page. */
+function installGesturePinchBlock() {
+  if (typeof document === "undefined") return;
+  if (document.documentElement.dataset.nebGestureLock) return;
+  document.documentElement.dataset.nebGestureLock = "1";
+  const stop = (e) => {
+    if (e.cancelable) e.preventDefault();
+  };
+  document.addEventListener("gesturestart", stop, { passive: false });
+  document.addEventListener("gesturechange", stop, { passive: false });
+}
+
 const HS_KEY = "spaceshipGame_highscores_v2";
 const MAX_ENT = 120;
 const MAX_PICKUPS = 24;
@@ -284,8 +335,8 @@ class ShipsP5 {
   constructor(tempR) {
     this.r = tempR;
     this.c = color(50, 100, 50, 10);
-    this.x = mouseX;
-    this.y = mouseY;
+    this.x = W / 2;
+    this.y = H / 2;
   }
   setLocation(tempX, tempY) {
     this.x = tempX;
@@ -315,8 +366,10 @@ class ShipsP5 {
 
 class ShipSprite {
   display(img, tilt) {
+    const px = gamePointerX();
+    const py = gamePointerY();
     push();
-    translate(mouseX + img.width / 2, mouseY + img.height / 2);
+    translate(px + img.width / 2, py + img.height / 2);
     rotate(tilt);
     imageMode(CENTER);
     image(img, 0, 0);
@@ -521,11 +574,13 @@ class EndGameP5 {
     }
   }
   mouseOverButton() {
+    const px = gamePointerX();
+    const py = gamePointerY();
     return (
-      mouseX > this.buttonX &&
-      mouseX < this.buttonX + this.buttonW &&
-      mouseY > this.buttonY &&
-      mouseY < this.buttonY + this.buttonH
+      px > this.buttonX &&
+      px < this.buttonX + this.buttonW &&
+      py > this.buttonY &&
+      py < this.buttonY + this.buttonH
     );
   }
 }
@@ -536,8 +591,15 @@ function preload() {
 }
 
 function setup() {
-  const c = createCanvas(W, H);
+  const { cw, ch } = computeCanvasSize();
+  const c = createCanvas(cw, ch);
   c.parent("game");
+  const dpr =
+    typeof window !== "undefined" && window.devicePixelRatio
+      ? window.devicePixelRatio
+      : 1;
+  pixelDensity(width < 420 ? 1 : min(2, dpr));
+
   ships = new ShipsP5(64);
   spaceShip = new ShipSprite();
   enemies = new Array(MAX_ENT);
@@ -552,9 +614,25 @@ function setup() {
     starY[i] = random(0, H);
     starSpeed[i] = random(1, 5);
   }
+
+  installTouchScrollBlock();
+  installGesturePinchBlock();
+}
+
+function windowResized() {
+  const { cw, ch } = computeCanvasSize();
+  resizeCanvas(cw, ch);
+  const dpr =
+    typeof window !== "undefined" && window.devicePixelRatio
+      ? window.devicePixelRatio
+      : 1;
+  pixelDensity(width < 420 ? 1 : min(2, dpr));
 }
 
 function draw() {
+  push();
+  scale(width / W, height / H);
+
   if (gameScreen === 0) {
     initScreen();
     if (!end) {
@@ -564,48 +642,61 @@ function draw() {
     playGameScreen();
   }
 
+  pop();
+
   if (gameScreen === 0 || end) {
     cursor();
+  } else {
+    noCursor();
   }
 }
 
 function initScreen() {
   background(8, 6, 18);
 
+  const narrow = width < 520;
+
   push();
   textStyle(BOLD);
   fill(255);
   textAlign(CENTER, CENTER);
-  textSize(56);
+  textSize(narrow ? 38 : 56);
   text("NEBULA RUN", W / 2, H / 2 - 110);
   textStyle(NORMAL);
-  textSize(22);
+  textSize(narrow ? 17 : 22);
   fill(160, 210, 255);
   text("Survive the storm. Chain combos. Grab tech drops.", W / 2, H / 2 - 52);
-  textSize(18);
+  textSize(narrow ? 15 : 18);
   fill(120, 180, 220);
-  text("Mouse to pilot  ·  Shield blocks rocks  ·  Gems & mult stack score", W / 2, H / 2 - 18);
+  text(
+    narrow
+      ? "Drag to fly · Shield · Gems · Combo"
+      : "Touch or mouse to pilot  ·  Shield / gems / combo score",
+    W / 2,
+    H / 2 - 18
+  );
 
   fill(0, 200, 255);
-  textSize(26);
-  text("CLICK TO LAUNCH", W / 2, H / 2 + 36);
+  textSize(narrow ? 22 : 26);
+  text("TAP TO LAUNCH", W / 2, H / 2 + 36);
 
   fill(100, 120, 160);
-  textSize(16);
+  textSize(narrow ? 14 : 16);
   text("Made by Hunter Monagahan", W / 2, H / 2 + 86);
 
   const board = loadScores();
   if (board.length) {
     fill(200);
     textAlign(CENTER, TOP);
-    textSize(17);
+    textSize(narrow ? 15 : 17);
     text("HALL OF FAME", W / 2, H / 2 + 130);
     let y = H / 2 + 158;
     for (let i = 0; i < min(5, board.length); i++) {
       const e = board[i];
       fill(i === 0 ? color(255, 220, 120) : 210);
+      textSize(narrow ? 14 : 17);
       text((i + 1) + ".  " + nf(e.score, 1) + "  ·  Lvl " + e.level, W / 2, y);
-      y += 24;
+      y += narrow ? 22 : 24;
     }
   }
   pop();
@@ -618,7 +709,7 @@ function playGameScreen() {
     return;
   }
 
-  ships.setLocation(mouseX + 52, mouseY + 18);
+  ships.setLocation(gamePointerX() + 52, gamePointerY() + 18);
   noCursor();
 
   push();
@@ -719,7 +810,7 @@ function playGameScreen() {
   ships.displayShieldRing(shieldActive());
   ships.display();
 
-  const tilt = map(mouseX, 0, W, -0.18, 0.18);
+  const tilt = map(gamePointerX(), 0, W, -0.18, 0.18);
   spaceShip.display(shipImg, tilt);
 
   if (shake > 0) shake *= 0.88;
@@ -791,4 +882,9 @@ function startGame() {
 
 function resetGame() {
   startGame();
+}
+
+/** Reduce pull-to-refresh / scroll while dragging on the canvas (mobile). */
+function touchMoved() {
+  return false;
 }
