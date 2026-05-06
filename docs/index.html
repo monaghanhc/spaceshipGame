@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nebula Run — Spaceship Survival</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: radial-gradient(ellipse at 50% 20%, #1a1a35 0%, #06060d 55%, #020208 100%);
+        display: flex;
+        min-height: 100vh;
+        align-items: center;
+        justify-content: center;
+        font-family: "Rajdhani", system-ui, sans-serif;
+      }
+      main {
+        line-height: 0;
+        border-radius: 8px;
+        box-shadow:
+          0 0 0 1px rgba(100, 200, 255, 0.12),
+          0 0 60px rgba(40, 120, 255, 0.18),
+          inset 0 0 80px rgba(0, 0, 0, 0.35);
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="game"></main>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <script src="sketch.js"></script>
+  </body>
+</html>
